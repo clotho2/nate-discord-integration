@@ -93,9 +93,22 @@ async def refresh_cache_async(channel_id: str, limit: int = 100):
 # MCP ENDPOINTS (Read Access)
 # ============================================================================
 
-@app.route('/sse/', methods=['POST', 'GET'])
+@app.route('/sse/', methods=['POST', 'GET', 'OPTIONS'])
 def mcp_endpoint():
     """Main MCP endpoint for ChatGPT"""
+    print(f"[MCP] {request.method} request to /sse/")
+    print(f"[MCP] Headers: {dict(request.headers)}")
+    print(f"[MCP] Content-Type: {request.content_type}")
+    print(f"[MCP] Raw data: {request.data[:500]}")  # First 500 bytes
+    
+    if request.method == 'OPTIONS':
+        # Handle CORS preflight
+        response = jsonify({"status": "ok"})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+    
     if request.method == 'GET':
         # Return server capabilities
         return jsonify({
@@ -106,9 +119,30 @@ def mcp_endpoint():
             }
         })
     
-    # Handle MCP protocol messages
-    data = request.get_json()
+    # Handle MCP protocol messages (POST)
+    try:
+        # Try to parse as JSON
+        if request.content_type and 'json' in request.content_type:
+            data = request.get_json(force=True)
+        else:
+            # Maybe it's form data or something else
+            data = request.get_json(force=True, silent=True)
+            if not data:
+                print("[MCP] Trying to parse as text...")
+                data = json.loads(request.data.decode('utf-8'))
+        
+        print(f"[MCP] Parsed data: {json.dumps(data, indent=2)}")
+    except Exception as e:
+        print(f"[MCP] Failed to parse request: {e}")
+        print(f"[MCP] Request data: {request.data}")
+        return jsonify({"error": f"Failed to parse request: {str(e)}"}), 400
+    
+    if not data:
+        print("[MCP] No data in request")
+        return jsonify({"error": "No data provided"}), 400
+    
     method = data.get('method')
+    print(f"[MCP] Method: {method}")
     
     if method == 'tools/list':
         return jsonify({
@@ -148,6 +182,8 @@ def mcp_endpoint():
         tool_name = data.get('params', {}).get('name')
         arguments = data.get('params', {}).get('arguments', {})
         
+        print(f"[MCP] Tool call: {tool_name} with args: {arguments}")
+        
         if tool_name == 'search':
             result = search_messages(arguments.get('query', ''))
             return jsonify({
@@ -169,8 +205,13 @@ def mcp_endpoint():
                     }
                 ]
             })
+        else:
+            print(f"[MCP] Unknown tool: {tool_name}")
+            return jsonify({"error": f"Unknown tool: {tool_name}"}), 400
     
-    return jsonify({"error": "Unknown method"}), 400
+    else:
+        print(f"[MCP] Unknown method: {method}")
+        return jsonify({"error": f"Unknown method: {method}"}), 400
 
 def search_messages(query: str) -> dict:
     """Search messages by query or tag"""
