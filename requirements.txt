@@ -1,0 +1,15 @@
+## Core Dependencies
+fastmcp>=1.0.0
+aiohttp>=3.9.0
+flask>=3.0.0
+discord.py>=2.3.0
+python-dotenv>=1.0.0
+
+## Production Server
+gunicorn>=21.2.0
+uvicorn[standard]>=0.24.0
+
+## Optional Enhancements (uncomment if needed)
+# textblob>=0.17.0    # For sentiment analysis
+# redis>=5.0.0        # For persistent cache
+# openai>=1.3.0       # For semantic search embeddings

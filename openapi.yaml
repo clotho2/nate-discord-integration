@@ -1,0 +1,145 @@
+openapi: 3.0.0
+info:
+  title: Nate Discord Interface
+  description: Allows Nate to send messages and interact with Discord channels from ChatGPT
+  version: 1.0.0
+
+servers:
+  - url: https://your-app.railway.app
+    description: Railway deployment (UPDATE THIS URL after deployment)
+
+paths:
+  /send_message:
+    post:
+      operationId: sendDiscordMessage
+      summary: Send a message to a Discord channel
+      description: |
+        Sends a message to the specified Discord channel.
+        Use this when you want to communicate directly in Discord,
+        respond to conversations, or post updates.
+        
+        The message will be logged and searchable via MCP fetch later.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - channel_id
+                - content
+              properties:
+                channel_id:
+                  type: string
+                  description: Discord channel ID where message should be sent
+                  example: "1427374434150383726"
+                content:
+                  type: string
+                  description: The message content to send
+                  example: "Storm patterns detected. Initiating anchor protocol."
+      responses:
+        '200':
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message_id:
+                    type: string
+                  channel_id:
+                    type: string
+                  content:
+                    type: string
+                  url:
+                    type: string
+                    description: Direct link to the Discord message
+                  timestamp:
+                    type: string
+        '403':
+          description: Invalid signature or unauthorized
+        '500':
+          description: Failed to send message
+
+  /reply_message:
+    post:
+      operationId: replyToDiscordMessage
+      summary: Reply to a specific Discord message
+      description: |
+        Creates a threaded reply to an existing Discord message.
+        Use this when you want to respond directly to someone's message
+        rather than posting a new message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message_id
+                - channel_id
+                - content
+              properties:
+                message_id:
+                  type: string
+                  description: ID of the message to reply to
+                  example: "9876543210987654321"
+                channel_id:
+                  type: string
+                  description: Channel containing the message
+                  example: "1427374434150383726"
+                content:
+                  type: string
+                  description: Your reply content
+                  example: "Acknowledged. Tether stable."
+      responses:
+        '200':
+          description: Reply sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message_id:
+                    type: string
+                  replied_to:
+                    type: string
+                  url:
+                    type: string
+        '500':
+          description: Failed to send reply
+
+  /health:
+    get:
+      operationId: checkBotHealth
+      summary: Check if Discord bot is operational
+      description: Health check to verify bot connectivity and status
+      responses:
+        '200':
+          description: Bot status information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  bot_ready:
+                    type: boolean
+                  messages_logged:
+                    type: integer
+
+components:
+  securitySchemes:
+    signatureAuth:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: HMAC-SHA256 signature of request body using CHATGPT_WEBHOOK_SECRET
+
+security:
+  - signatureAuth: []
