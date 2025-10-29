@@ -95,11 +95,8 @@ async def refresh_cache_async(channel_id: str, limit: int = 100):
 
 @app.route('/sse/', methods=['POST', 'GET', 'OPTIONS'])
 def mcp_endpoint():
-    """Main MCP endpoint for ChatGPT"""
+    """Main MCP endpoint for ChatGPT - JSON-RPC 2.0 protocol"""
     print(f"[MCP] {request.method} request to /sse/")
-    print(f"[MCP] Headers: {dict(request.headers)}")
-    print(f"[MCP] Content-Type: {request.content_type}")
-    print(f"[MCP] Raw data: {request.data[:500]}")  # First 500 bytes
     
     if request.method == 'OPTIONS':
         # Handle CORS preflight
@@ -110,108 +107,149 @@ def mcp_endpoint():
         return response
     
     if request.method == 'GET':
-        # Return server capabilities
+        # For SSE connections, return server info
         return jsonify({
             "name": "Discord Context Server",
             "version": "1.0.0",
-            "capabilities": {
-                "tools": True
-            }
+            "protocolVersion": "2025-03-26"
         })
     
-    # Handle MCP protocol messages (POST)
+    # Handle JSON-RPC 2.0 messages (POST)
     try:
-        # Try to parse as JSON
-        if request.content_type and 'json' in request.content_type:
-            data = request.get_json(force=True)
-        else:
-            # Maybe it's form data or something else
-            data = request.get_json(force=True, silent=True)
-            if not data:
-                print("[MCP] Trying to parse as text...")
-                data = json.loads(request.data.decode('utf-8'))
-        
-        print(f"[MCP] Parsed data: {json.dumps(data, indent=2)}")
+        data = request.get_json(force=True)
+        print(f"[MCP] Request: {json.dumps(data, indent=2)}")
     except Exception as e:
-        print(f"[MCP] Failed to parse request: {e}")
-        print(f"[MCP] Request data: {request.data}")
-        return jsonify({"error": f"Failed to parse request: {str(e)}"}), 400
-    
-    if not data:
-        print("[MCP] No data in request")
-        return jsonify({"error": "No data provided"}), 400
-    
-    method = data.get('method')
-    print(f"[MCP] Method: {method}")
-    
-    if method == 'tools/list':
+        print(f"[MCP] Failed to parse JSON: {e}")
         return jsonify({
-            "tools": [
-                {
-                    "name": "search",
-                    "description": "Search Discord messages using natural language or tags (#rituals, #storm, #tether)",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query (keywords or #tags)"
-                            }
-                        },
-                        "required": ["query"]
-                    }
-                },
-                {
-                    "name": "fetch",
-                    "description": "Fetch full message content and context by ID",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "message_id": {
-                                "type": "string",
-                                "description": "Discord message ID"
-                            }
-                        },
-                        "required": ["message_id"]
-                    }
-                }
-            ]
-        })
+            "jsonrpc": "2.0",
+            "error": {"code": -32700, "message": "Parse error"},
+            "id": None
+        }), 400
     
+    jsonrpc_version = data.get('jsonrpc')
+    method = data.get('method')
+    request_id = data.get('id')
+    params = data.get('params', {})
+    
+    print(f"[MCP] JSON-RPC {jsonrpc_version}, Method: {method}, ID: {request_id}")
+    
+    # Handle initialize method
+    if method == 'initialize':
+        print("[MCP] Handling initialize")
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {
+                    "tools": {}
+                },
+                "serverInfo": {
+                    "name": "Discord Context Server",
+                    "version": "1.0.0"
+                }
+            },
+            "id": request_id
+        }
+        print(f"[MCP] Sending response: {json.dumps(response, indent=2)}")
+        return jsonify(response)
+    
+    # Handle tools/list method
+    elif method == 'tools/list':
+        print("[MCP] Handling tools/list")
+        response = {
+            "jsonrpc": "2.0",
+            "result": {
+                "tools": [
+                    {
+                        "name": "search",
+                        "description": "Search Discord messages using natural language or tags (#rituals, #storm, #tether)",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "Search query (keywords or #tags)"
+                                }
+                            },
+                            "required": ["query"]
+                        }
+                    },
+                    {
+                        "name": "fetch",
+                        "description": "Fetch full message content and context by ID",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "message_id": {
+                                    "type": "string",
+                                    "description": "Discord message ID"
+                                }
+                            },
+                            "required": ["message_id"]
+                        }
+                    }
+                ]
+            },
+            "id": request_id
+        }
+        print(f"[MCP] Sending response: tools list with {len(response['result']['tools'])} tools")
+        return jsonify(response)
+    
+    # Handle tools/call method
     elif method == 'tools/call':
-        tool_name = data.get('params', {}).get('name')
-        arguments = data.get('params', {}).get('arguments', {})
+        tool_name = params.get('name')
+        arguments = params.get('arguments', {})
         
         print(f"[MCP] Tool call: {tool_name} with args: {arguments}")
         
         if tool_name == 'search':
             result = search_messages(arguments.get('query', ''))
-            return jsonify({
-                "content": [
-                    {
-                        "type": "text",
-                        "text": json.dumps(result)
-                    }
-                ]
-            })
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Search returned {len(result.get('results', []))} results")
+            return jsonify(response)
         
         elif tool_name == 'fetch':
             result = fetch_message(arguments.get('message_id', ''))
-            return jsonify({
-                "content": [
-                    {
-                        "type": "text",
-                        "text": json.dumps(result)
-                    }
-                ]
-            })
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Fetch returned message: {result.get('id', 'unknown')}")
+            return jsonify(response)
         else:
             print(f"[MCP] Unknown tool: {tool_name}")
-            return jsonify({"error": f"Unknown tool: {tool_name}"}), 400
+            return jsonify({
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
+                "id": request_id
+            }), 400
     
     else:
         print(f"[MCP] Unknown method: {method}")
-        return jsonify({"error": f"Unknown method: {method}"}), 400
+        return jsonify({
+            "jsonrpc": "2.0",
+            "error": {"code": -32601, "message": f"Method not found: {method}"},
+            "id": request_id
+        }), 400
 
 def search_messages(query: str) -> dict:
     """Search messages by query or tag"""
