@@ -120,7 +120,7 @@ Copy output and use it as `CHATGPT_WEBHOOK_SECRET`
 1. In Railway project, go to **"Settings"** tab
 2. Scroll to **"Networking"** section
 3. Click **"Generate Domain"**
-4. You'll get a URL like: `https://nate-discord-integration-production-xxxx.up.railway.app`
+4. You'll get a URL like: `web-production-39c45.up.railway.app`
 
 ### 4.2 Note Your URLs
 

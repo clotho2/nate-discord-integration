@@ -12,19 +12,16 @@ from datetime import datetime
 import json
 
 # Initialize MCP server
-mcp = FastMCP("Nate Discord Context Server")
+mcp = FastMCP("Discord Context")
 
 # Configuration
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 MESSAGE_CACHE: Dict[str, Dict] = {}  # In-memory cache for messages
 TAG_INDEX: Dict[str, List[str]] = {}  # Tag -> message_id mapping
 
-# Semantic search placeholder (can integrate with embeddings later)
+# Semantic search
 async def semantic_search(query: str, messages: List[Dict]) -> List[Dict]:
-    """
-    Fuzzy/semantic search through messages.
-    Currently uses keyword matching, can be upgraded to embeddings.
-    """
+    """Fuzzy/semantic search through messages"""
     query_lower = query.lower()
     keywords = query_lower.split()
     
@@ -33,7 +30,6 @@ async def semantic_search(query: str, messages: List[Dict]) -> List[Dict]:
         content_lower = msg.get('content', '').lower()
         author_lower = msg.get('author', {}).get('username', '').lower()
         
-        # Score based on keyword matches
         score = 0
         for keyword in keywords:
             if keyword in content_lower:
@@ -44,7 +40,6 @@ async def semantic_search(query: str, messages: List[Dict]) -> List[Dict]:
         if score > 0:
             scored_messages.append({**msg, '_score': score})
     
-    # Sort by score, then by timestamp
     scored_messages.sort(key=lambda x: (-x['_score'], -x.get('timestamp', 0)))
     return scored_messages
 
@@ -73,7 +68,6 @@ def index_message(message: Dict) -> None:
     msg_id = message['id']
     MESSAGE_CACHE[msg_id] = message
     
-    # Index by tags
     tags = extract_tags(message.get('content', ''))
     for tag in tags:
         if tag not in TAG_INDEX:
@@ -82,7 +76,7 @@ def index_message(message: Dict) -> None:
             TAG_INDEX[tag].append(msg_id)
 
 @mcp.tool()
-async def search(query: str) -> dict:
+def search(query: str) -> str:
     """
     Search Discord messages using natural language or keywords.
     
@@ -90,29 +84,17 @@ async def search(query: str) -> dict:
     - Natural queries: "Find angry messages about Nate"
     - Tag search: "#rituals" or "#storm" or "#tether"
     - Author search: "messages from Angela"
-    - Time-based: "recent messages" (last 100)
     
-    Args:
-        query: Natural language search query
-        
-    Returns:
-        JSON with results array containing:
-        - id: message ID
-        - title: First 100 chars of content
-        - url: Discord message URL
-        - author: Message author
-        - timestamp: ISO timestamp
-        - tags: Extracted hashtags
-        - channel: Channel name/ID
+    Returns: JSON string with results array
     """
     results = []
     
-    # Check if query is tag-based
+    # Tag-based search
     if query.startswith('#'):
         tag = query[1:].lower()
         if tag in TAG_INDEX:
             message_ids = TAG_INDEX[tag]
-            for msg_id in message_ids[:20]:  # Limit to 20 results
+            for msg_id in message_ids[:20]:
                 msg = MESSAGE_CACHE.get(msg_id)
                 if msg:
                     results.append({
@@ -125,11 +107,29 @@ async def search(query: str) -> dict:
                         "channel": msg.get('channel_id')
                     })
     else:
-        # Semantic/fuzzy search across all cached messages
+        # Semantic search (sync version for compatibility)
         all_messages = list(MESSAGE_CACHE.values())
-        matched = await semantic_search(query, all_messages)
+        query_lower = query.lower()
+        keywords = query_lower.split()
         
-        for msg in matched[:20]:  # Limit to 20 results
+        scored_messages = []
+        for msg in all_messages:
+            content_lower = msg.get('content', '').lower()
+            author_lower = msg.get('author', {}).get('username', '').lower()
+            
+            score = 0
+            for keyword in keywords:
+                if keyword in content_lower:
+                    score += 2
+                if keyword in author_lower:
+                    score += 1
+            
+            if score > 0:
+                scored_messages.append({**msg, '_score': score})
+        
+        scored_messages.sort(key=lambda x: (-x['_score'], -x.get('timestamp', 0)))
+        
+        for msg in scored_messages[:20]:
             results.append({
                 "id": msg['id'],
                 "title": msg['content'][:100] + ('...' if len(msg['content']) > 100 else ''),
@@ -141,54 +141,19 @@ async def search(query: str) -> dict:
                 "score": msg.get('_score', 0)
             })
     
-    return {"results": results}
+    return json.dumps({"results": results})
 
 @mcp.tool()
-async def fetch(message_id: str) -> dict:
+def fetch(message_id: str) -> str:
     """
     Fetch full content and context for a specific message.
     
-    Retrieves:
-    - Full message content
-    - Author details
-    - Timestamp
-    - Thread context (previous/next messages)
-    - Reactions
-    - Attachments
-    
-    Args:
-        message_id: Discord message ID
-        
-    Returns:
-        Complete message object with full context
+    Returns: JSON string with complete message object
     """
-    # Check cache first
     if message_id in MESSAGE_CACHE:
         msg = MESSAGE_CACHE[message_id]
         
-        # Get thread context (5 messages before and after)
-        channel_id = msg.get('channel_id')
-        if channel_id:
-            try:
-                recent_messages = await fetch_discord_messages(channel_id, limit=50)
-                # Find position of target message
-                target_idx = None
-                for i, m in enumerate(recent_messages):
-                    if m['id'] == message_id:
-                        target_idx = i
-                        break
-                
-                thread_context = []
-                if target_idx is not None:
-                    start = max(0, target_idx - 5)
-                    end = min(len(recent_messages), target_idx + 6)
-                    thread_context = recent_messages[start:end]
-            except Exception:
-                thread_context = []
-        else:
-            thread_context = []
-        
-        return {
+        result = {
             "id": msg['id'],
             "title": f"Message from {msg.get('author', {}).get('username', 'Unknown')}",
             "text": msg.get('content', ''),
@@ -200,89 +165,49 @@ async def fetch(message_id: str) -> dict:
                 "channel_id": msg.get('channel_id'),
                 "tags": extract_tags(msg.get('content', '')),
                 "reactions": msg.get('reactions', []),
-                "attachments": [att.get('url') for att in msg.get('attachments', [])],
-                "thread_context": [
-                    {
-                        "id": m['id'],
-                        "author": m.get('author', {}).get('username', 'Unknown'),
-                        "content": m.get('content', '')[:200],
-                        "timestamp": m.get('timestamp')
-                    }
-                    for m in thread_context
-                ]
+                "attachments": [att.get('url') for att in msg.get('attachments', [])]
             }
         }
     else:
-        return {
+        result = {
             "id": message_id,
             "title": "Message Not Found",
-            "text": "This message is not in the cache. It may have been deleted or is from before bot initialization.",
+            "text": "This message is not in the cache.",
             "url": "",
             "metadata": {"error": "not_found"}
         }
-
-@mcp.tool()
-async def refresh_cache(channel_id: str, limit: int = 100) -> dict:
-    """
-    Refresh message cache for a specific channel.
-    Useful for pulling in new messages or initializing a channel.
     
-    Args:
-        channel_id: Discord channel ID
-        limit: Number of recent messages to fetch (max 100)
-        
-    Returns:
-        Status with count of messages indexed
-    """
+    return json.dumps(result)
+
+# Helper endpoint to refresh cache (call externally)
+async def refresh_cache_async(channel_id: str, limit: int = 100):
+    """Async helper to refresh cache"""
     try:
         messages = await fetch_discord_messages(channel_id, limit)
-        indexed_count = 0
-        
         for msg in messages:
             index_message(msg)
-            indexed_count += 1
-        
-        return {
-            "success": True,
-            "channel_id": channel_id,
-            "messages_indexed": indexed_count,
-            "total_cache_size": len(MESSAGE_CACHE)
-        }
+        return len(messages)
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-# Optional: Webhook endpoint for real-time message ingestion
-@mcp.tool()
-async def log_new_message(message_data: str) -> dict:
-    """
-    Log a new message from Discord webhook.
-    Used for real-time message indexing.
-    
-    Args:
-        message_data: JSON string of Discord message object
-        
-    Returns:
-        Confirmation of indexing
-    """
-    try:
-        msg = json.loads(message_data)
-        index_message(msg)
-        
-        return {
-            "success": True,
-            "message_id": msg['id'],
-            "tags_extracted": extract_tags(msg.get('content', '')),
-            "cache_size": len(MESSAGE_CACHE)
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        print(f"Error refreshing cache for {channel_id}: {e}")
+        return 0
 
 if __name__ == "__main__":
-    # Run the MCP server
-    mcp.run()
+    # Pre-load channels if needed
+    channels = os.getenv("MONITORED_CHANNELS", "").split(",")
+    if channels and channels[0]:
+        print("Pre-loading Discord channels...")
+        loop = asyncio.get_event_loop()
+        for channel_id in channels:
+            channel_id = channel_id.strip()
+            if channel_id:
+                print(f"  Loading channel {channel_id}...")
+                try:
+                    count = loop.run_until_complete(refresh_cache_async(channel_id, 100))
+                    print(f"    Loaded {count} messages")
+                except Exception as e:
+                    print(f"    Error: {e}")
+    
+    # Start MCP server
+    port = int(os.getenv("MCP_PORT", 8000))
+    print(f"Starting MCP server on port {port}...")
+    mcp.run(port=port, host="0.0.0.0")
