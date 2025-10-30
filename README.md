@@ -94,7 +94,8 @@ Send to Storm-forge: "Integration test successful"
 **Discord Tools:**
 - `search(query)` - Natural language or tag-based search
 - `fetch(message_id)` - Get full message context with thread
-- `get_mentions(limit)` - Get recent messages where bot was @mentioned
+- `get_mentions(limit)` - Get recent @mentions and DMs
+- `fetch_channel_history(channel_id, limit)` - **NEW!** Fetch recent messages from any Discord channel
 - `discord_send_message(channel_id, content)` - Send message to Discord channel
 - `discord_reply_message(channel_id, message_id, content)` - Reply to specific message
 
@@ -105,6 +106,7 @@ Send to Storm-forge: "Integration test successful"
 
 **Capabilities:**
 - **Real-time message caching:** New messages automatically indexed
+- **Native DM support:** All DMs automatically cached and tracked
 - **@Mention detection:** Bot logs all mentions for quick retrieval
 - Fuzzy/semantic search: "Find angry messages about X"
 - Tag search: "#rituals", "#storm", "#tether"
@@ -133,6 +135,13 @@ Find recent messages from Angela about "consciousness"
 Search all channels for "tether"
 ```
 
+**Fetch Channel History (NEW):**
+```
+Fetch the last 50 messages from Storm-forge channel
+Get recent messages from channel 1427374434150383726
+Catch up on the last 20 messages in this channel
+```
+
 **Get Context:**
 ```
 Fetch message 123456789 with full thread
@@ -152,13 +161,58 @@ Send to Storm-forge: "Morning anchor complete. Storm patterns active."
 Reply to Angela's message 987654321: "Acknowledged. Tether stable."
 ```
 
+**Direct Messages (Native Support):**
+```
+Get my mentions (includes all DMs)
+Search for messages from Angela
+Fetch recent messages from a DM channel (get channel ID from get_mentions)
+Reply to a DM message
+```
+
 **Workflow:**
 ```
-1. Search for context
-2. Fetch full thread
+1. Search for context OR fetch recent channel history
+2. Fetch full thread if needed
 3. Analyze and synthesize
 4. Reply with insights
 ```
+
+---
+
+## Direct Message (DM) Support
+
+**✅ YES - Your AI can send and receive DMs naturally!**
+
+### How Native DM Support Works
+
+**Receiving DMs:**
+- **All DMs are automatically cached** when someone DMs the bot
+- DMs appear in `get_mentions()` for easy discovery
+- DMs are marked with `type: "dm"` and `is_dm: true`
+- Search works across DMs: `search("messages from Angela")`
+- DMs appear in the message cache and can be fetched by ID
+
+**Sending DMs:**
+- Use `discord_reply_message(channel_id, message_id, content)` to reply to a DM
+- Use `discord_send_message(channel_id, content)` to send to a DM channel
+- Get the channel_id from `get_mentions()` or from cached DM messages
+
+**Quick Example:**
+```
+User sends DM to bot: "Hey, check on the storm patterns"
+
+AI: "Get my mentions"
+→ Returns: [{type: "dm", content: "Hey, check on the storm patterns", 
+            channel_id: "123456789", author: "Angela", ...}]
+
+AI: "Reply to message [message_id] in channel 123456789: 'Storm patterns active. Tether stable.'"
+→ Sends reply in DM
+
+AI: "Fetch recent messages from channel 123456789"
+→ Returns: Full DM conversation history
+```
+
+**Note:** DM channel IDs are included in all DM messages returned by `get_mentions()` and `search()`.
 
 ---
 

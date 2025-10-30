@@ -30,10 +30,11 @@ TAG_INDEX: Dict[str, List[str]] = {}
 MESSAGE_LOG: list = []
 MENTION_LOG: list = []  # Track messages where bot was mentioned
 
-# Discord bot
+# Discord bot with DM support
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
+intents.members = True  # Needed for user information
 bot = commands.Bot(command_prefix="!", intents=intents)
 loop = asyncio.new_event_loop()
 
@@ -324,6 +325,25 @@ def mcp_endpoint():
                             },
                             "additionalProperties": False
                         }
+                    },
+                    {
+                        "name": "fetch_channel_history",
+                        "description": "Fetch recent messages from a Discord channel to catch up on conversation context. Works with server channels and DM channels.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "channel_id": {
+                                    "type": "string",
+                                    "description": "Discord channel ID to fetch messages from (works with both server channels and DM channel IDs)"
+                                },
+                                "limit": {
+                                    "type": "number",
+                                    "description": "Number of recent messages to fetch (default 50, max 100)"
+                                }
+                            },
+                            "required": ["channel_id"],
+                            "additionalProperties": False
+                        }
                     }
                 ]
             },
@@ -497,6 +517,47 @@ def mcp_endpoint():
                 "id": request_id
             }
             print(f"[MCP] Get mentions: {result.get('returned', 0)} mentions returned")
+            return jsonify(response)
+        
+        elif tool_name == 'fetch_channel_history':
+            channel_id = arguments.get('channel_id', '')
+            limit = arguments.get('limit', 50)
+            
+            # Cap limit at 100
+            if limit > 100:
+                limit = 100
+            
+            # Run the async function in the bot's event loop
+            future = asyncio.run_coroutine_threadsafe(
+                fetch_discord_messages(channel_id, limit),
+                loop
+            )
+            messages = future.result(timeout=30)
+            
+            # Also add these messages to the cache for search/fetch later
+            for msg in messages:
+                index_message(msg)
+            
+            result = {
+                "success": True,
+                "channel_id": channel_id,
+                "message_count": len(messages),
+                "messages": messages
+            }
+            
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Fetch channel history: {len(messages)} messages from channel {channel_id}")
             return jsonify(response)
         
         else:
@@ -927,6 +988,7 @@ async def on_message(message):
     # Determine if we should cache this message
     is_monitored = str(message.channel.id) in monitored_channels
     is_mention = bot.user.mentioned_in(message)
+    is_dm = message.guild is None  # This is a direct message
     is_reply_to_bot = False
     replied_message_content = None
     
@@ -940,8 +1002,8 @@ async def on_message(message):
         except:
             pass  # Message might be deleted or inaccessible
     
-    # Cache messages from monitored channels, mentions, or replies to bot
-    if is_monitored or is_mention or is_reply_to_bot:
+    # Cache messages from monitored channels, mentions, replies to bot, or ALL DMs
+    if is_monitored or is_mention or is_reply_to_bot or is_dm:
         # Create message dict
         msg_data = {
             'id': str(message.id),
@@ -965,7 +1027,7 @@ async def on_message(message):
         index_message(msg_data)
         
         # Log different message types
-        if message.guild is None:
+        if is_dm:
             print(f"💬 DM from {message.author.name}: {message.content[:100]}")
         elif is_reply_to_bot:
             print(f"↩️  Reply to bot from {message.author.name} in channel {message.channel.id}")
@@ -975,8 +1037,8 @@ async def on_message(message):
             print(f"🔔 Bot mentioned by {message.author.name} in channel {message.channel.id}")
             print(f"   Message: {message.content[:100]}")
         
-        # Add to mention log if mentioned or replied to
-        if is_mention or is_reply_to_bot:
+        # Add to mention log if mentioned, replied to, or DM (for easy retrieval)
+        if is_mention or is_reply_to_bot or is_dm:
             mention_entry = {
                 'id': str(message.id),
                 'content': message.content,
@@ -985,8 +1047,8 @@ async def on_message(message):
                 'channel_id': str(message.channel.id),
                 'timestamp': message.created_at.isoformat(),
                 'url': f"https://discord.com/channels/{message.guild.id if message.guild else '@me'}/{message.channel.id}/{message.id}",
-                'type': 'reply' if is_reply_to_bot else 'mention',
-                'is_dm': message.guild is None
+                'type': 'dm' if is_dm else ('reply' if is_reply_to_bot else 'mention'),
+                'is_dm': is_dm
             }
             
             if is_reply_to_bot:
@@ -1024,7 +1086,7 @@ if __name__ == "__main__":
     # Start Flask server
     port = int(os.getenv("PORT", 3000))
     print(f"🎯 Starting server on port {port}...")
-    print("📝 MCP Tools: search, fetch, write_file, edit_file, execute_shell, discord_send_message, discord_reply_message, get_mentions")
-    print("💬 Discord Features: Real-time message caching, @mention detection")
+    print("📝 MCP Tools: search, fetch, fetch_channel_history, get_mentions, discord_send_message, discord_reply_message, write_file, edit_file, execute_shell")
+    print("💬 Discord Features: Real-time message caching, Native DM support, @mention detection")
     print("🔗 REST Endpoints: /send_message, /reply_message, /health")
     app.run(host="0.0.0.0", port=port)
