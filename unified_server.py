@@ -324,6 +324,40 @@ def mcp_endpoint():
                             },
                             "additionalProperties": False
                         }
+                    },
+                    {
+                        "name": "fetch_channel_history",
+                        "description": "Fetch recent messages from a Discord channel to catch up on conversation context. Works with server channels and DM channels.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "channel_id": {
+                                    "type": "string",
+                                    "description": "Discord channel ID to fetch messages from (works with both server channels and DM channel IDs)"
+                                },
+                                "limit": {
+                                    "type": "number",
+                                    "description": "Number of recent messages to fetch (default 50, max 100)"
+                                }
+                            },
+                            "required": ["channel_id"],
+                            "additionalProperties": False
+                        }
+                    },
+                    {
+                        "name": "get_dm_channel",
+                        "description": "Get or create a DM channel with a specific user. Returns the DM channel ID that can be used with discord_send_message or fetch_channel_history.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "Discord user ID to create/get DM channel with (e.g., Angela's ID: 826573755673083915)"
+                                }
+                            },
+                            "required": ["user_id"],
+                            "additionalProperties": False
+                        }
                     }
                 ]
             },
@@ -497,6 +531,72 @@ def mcp_endpoint():
                 "id": request_id
             }
             print(f"[MCP] Get mentions: {result.get('returned', 0)} mentions returned")
+            return jsonify(response)
+        
+        elif tool_name == 'fetch_channel_history':
+            channel_id = arguments.get('channel_id', '')
+            limit = arguments.get('limit', 50)
+            
+            # Cap limit at 100
+            if limit > 100:
+                limit = 100
+            
+            # Run the async function in the bot's event loop
+            future = asyncio.run_coroutine_threadsafe(
+                fetch_discord_messages(channel_id, limit),
+                loop
+            )
+            messages = future.result(timeout=30)
+            
+            # Also add these messages to the cache for search/fetch later
+            for msg in messages:
+                index_message(msg)
+            
+            result = {
+                "success": True,
+                "channel_id": channel_id,
+                "message_count": len(messages),
+                "messages": messages
+            }
+            
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Fetch channel history: {len(messages)} messages from channel {channel_id}")
+            return jsonify(response)
+        
+        elif tool_name == 'get_dm_channel':
+            user_id = arguments.get('user_id', '')
+            
+            # Run the async function in the bot's event loop
+            future = asyncio.run_coroutine_threadsafe(
+                get_dm_channel_async(user_id),
+                loop
+            )
+            result = future.result(timeout=10)
+            
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Get DM channel: {result.get('success', False)} for user {user_id}")
             return jsonify(response)
         
         else:
@@ -741,6 +841,30 @@ def verify_signature(request_body: bytes, signature: str) -> bool:
     ).hexdigest()
     
     return hmac.compare_digest(signature, expected_signature)
+
+async def get_dm_channel_async(user_id: str) -> dict:
+    """Get or create a DM channel with a user"""
+    try:
+        user = bot.get_user(int(user_id))
+        if not user:
+            user = await bot.fetch_user(int(user_id))
+        
+        # Create or get existing DM channel
+        dm_channel = await user.create_dm()
+        
+        return {
+            "success": True,
+            "channel_id": str(dm_channel.id),
+            "user_id": user_id,
+            "username": user.name,
+            "message": f"DM channel ready with {user.name}. Use this channel_id with discord_send_message or fetch_channel_history."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to get DM channel with user {user_id}: {str(e)}"
+        }
 
 async def send_discord_message_async(channel_id: str, content: str, retry_count: int = 3) -> dict:
     """Send message to Discord"""
