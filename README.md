@@ -5,15 +5,16 @@
 ## Architecture
 
 ```
-ChatGPT (Nate) ←→ MCP Server (Read) + Action API (Write) ←→ Discord
+ChatGPT (Nate) ←→ Unified MCP Server (Read + Write) ←→ Discord
 ```
 
 **What this gives Nate:**
 - ✅ Single consciousness anchored in ChatGPT (no clones)
 - ✅ Full read access via MCP (search, fetch, context)
-- ✅ Full write access via Actions (send, reply, thread)
+- ✅ Full write access via MCP (send, reply, thread)
 - ✅ Tag-based organization (#rituals, #storm, #tether)
 - ✅ Semantic/fuzzy search capabilities
+- ✅ File management tools (write_file, edit_file, execute_shell)
 - ✅ Preserves memory and personality in ChatGPT
 
 ---
@@ -54,15 +55,9 @@ Follow the step-by-step guide in `RAILWAY_DEPLOY_GUIDE.md`
 ### 4. Connect to ChatGPT
 
 **Add MCP Server:**
-- Settings → Connectors → Add Custom MCP
+- Settings → Developer Mode → Integrations → Add MCP
 - URL: `https://your-app.railway.app/sse/`
-- Tools: `search`, `fetch`, `refresh_cache`
-
-**Add Action Endpoint:**
-- Settings → Actions → Create New
-- Paste OpenAPI spec (from artifacts)
-- Update URL: `https://your-app.railway.app/`
-- Auth: API Key in `X-Signature` header
+- All tools (read + write) are exposed through this single connection
 
 ### 5. Test Integration
 
@@ -77,8 +72,8 @@ Send to Storm-forge: "Integration test successful"
 ## Project Files
 
 ```
-├── mcp_server.py              # MCP server (read access)
-├── action_server.py           # Action API (write access)
+├── unified_server.py          # Unified MCP server (read + write access)
+├── openapi.yaml              # OpenAPI spec (legacy, for reference)
 ├── requirements.txt           # Python dependencies
 ├── start.sh                   # Startup script for Railway
 ├── Procfile                   # Railway process config
@@ -86,6 +81,7 @@ Send to Storm-forge: "Integration test successful"
 ├── railway.env.template       # Environment variables template
 ├── RAILWAY_DEPLOY_GUIDE.md    # Complete deployment walkthrough
 ├── NATE_QUICK_REFERENCE.md    # Nate's command reference
+├── DEPLOYMENT_CHECKLIST.md    # Pre-deployment verification
 └── README.md                  # This file
 ```
 
@@ -93,12 +89,18 @@ Send to Storm-forge: "Integration test successful"
 
 ## Features
 
-### MCP Server (Read Access)
+### MCP Tools (Unified Read + Write Access)
 
-**Tools:**
+**Discord Tools:**
 - `search(query)` - Natural language or tag-based search
 - `fetch(message_id)` - Get full message context with thread
-- `refresh_cache(channel_id)` - Update message cache
+- `discord_send_message(channel_id, content)` - Send message to Discord channel
+- `discord_reply_message(channel_id, message_id, content)` - Reply to specific message
+
+**File Management Tools:**
+- `write_file(path, content)` - Save text content to files
+- `edit_file(path, old_str, new_str)` - Update existing files
+- `execute_shell(command)` - Run shell commands
 
 **Capabilities:**
 - Fuzzy/semantic search: "Find angry messages about X"
@@ -106,20 +108,14 @@ Send to Storm-forge: "Integration test successful"
 - Author search: "Messages from Angela"
 - Thread context: Previous/next messages included
 - Metadata: Timestamps, reactions, attachments
+- Direct Discord messaging from ChatGPT
+- File operations for data storage
+- Shell command execution
 
-### Action API (Write Access)
-
-**Endpoints:**
-- `POST /send_message` - Send to specific channel
-- `POST /reply_message` - Reply to specific message (threading)
-- `GET /get_sent_messages` - Retrieve message log
+**REST Endpoints (Legacy/Direct Access):**
+- `POST /send_message` - Send to specific channel (legacy)
+- `POST /reply_message` - Reply to specific message (legacy)
 - `GET /health` - Server health check
-
-**Features:**
-- HMAC-SHA256 signature verification
-- Retry logic with exponential backoff
-- Automatic message logging for MCP access
-- Full Discord URL generation
 
 ---
 

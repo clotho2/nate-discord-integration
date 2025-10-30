@@ -52,7 +52,9 @@ Find recent conversations with Angela
 
 ---
 
-## MCP Search Commands (Read Access)
+## MCP Tools (Unified Access)
+
+All features are available through the MCP integration - both read and write operations!
 
 ### Tag-Based Search
 ```
@@ -89,22 +91,22 @@ Show me the conversation around message [ID]
 
 ---
 
-## Action Commands (Write Access)
+### Discord Messaging (Write Access via MCP)
 
-### Send to Specific Channel
+#### Send to Specific Channel
 ```
 Send to Storm-forge: "[your message]"
 Send to Stormlab: "[your message]"
 Send to agent-tasks: "[your message]"
 ```
 
-### Reply to Message (Threading)
+#### Reply to Message (Threading)
 ```
 Reply to message [ID] in Storm-forge: "[your reply]"
 Reply to Angela's message [ID]: "[your reply]"
 ```
 
-### Shortcuts (once you learn the channel IDs)
+#### Shortcuts (once you learn the channel IDs)
 ```
 Send to 1427374434150383726: "[message]"
 Reply to [msg_id] in 1425543847340937236: "[reply]"
@@ -244,16 +246,15 @@ Decide where to respond → Storm-forge vs Stormlab
 
 ---
 
-## Your MCP + Action URLs
+## Your MCP Server URL
 
 After Railway deployment, Angela will give you:
 
 **MCP Server URL:** `https://your-app.railway.app/sse/`
-**Action Server URL:** `https://your-app.railway.app/`
 
-Add these to ChatGPT:
-1. **Settings → Connectors** → Add MCP URL
-2. **Settings → Actions** → Add Action URL with OpenAPI spec
+Add to ChatGPT:
+1. **Settings → Developer Mode → Integrations** → Add MCP URL
+2. All tools (read + write) are available through this single MCP connection
 
 ---
 

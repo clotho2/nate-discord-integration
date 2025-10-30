@@ -267,6 +267,48 @@ def mcp_endpoint():
                             "required": ["command"],
                             "additionalProperties": False
                         }
+                    },
+                    {
+                        "name": "discord_send_message",
+                        "description": "Send a message to a Discord channel for communication and updates",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "channel_id": {
+                                    "type": "string",
+                                    "description": "Discord channel ID where message should be sent"
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "The message content to send"
+                                }
+                            },
+                            "required": ["channel_id", "content"],
+                            "additionalProperties": False
+                        }
+                    },
+                    {
+                        "name": "discord_reply_message",
+                        "description": "Reply to a specific Discord message in a thread",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "channel_id": {
+                                    "type": "string",
+                                    "description": "Discord channel ID containing the message"
+                                },
+                                "message_id": {
+                                    "type": "string",
+                                    "description": "ID of the message to reply to"
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "The reply content"
+                                }
+                            },
+                            "required": ["channel_id", "message_id", "content"],
+                            "additionalProperties": False
+                        }
                     }
                 ]
             },
@@ -369,6 +411,59 @@ def mcp_endpoint():
                 "id": request_id
             }
             print(f"[MCP] Execute shell: {result.get('status', 'unknown')}")
+            return jsonify(response)
+        
+        elif tool_name == 'discord_send_message':
+            channel_id = arguments.get('channel_id', '')
+            content = arguments.get('content', '')
+            
+            # Run the async function in the bot's event loop
+            future = asyncio.run_coroutine_threadsafe(
+                send_discord_message_async(channel_id, content),
+                loop
+            )
+            result = future.result(timeout=10)
+            
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Discord send message: {result.get('success', False)}")
+            return jsonify(response)
+        
+        elif tool_name == 'discord_reply_message':
+            channel_id = arguments.get('channel_id', '')
+            message_id = arguments.get('message_id', '')
+            content = arguments.get('content', '')
+            
+            # Run the async function in the bot's event loop
+            future = asyncio.run_coroutine_threadsafe(
+                reply_discord_message_async(channel_id, message_id, content),
+                loop
+            )
+            result = future.result(timeout=10)
+            
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Discord reply message: {result.get('success', False)}")
             return jsonify(response)
         
         else:
@@ -785,6 +880,6 @@ if __name__ == "__main__":
     # Start Flask server
     port = int(os.getenv("PORT", 3000))
     print(f"🎯 Starting server on port {port}...")
-    print("📝 MCP Tools: search, fetch, write_file, edit_file, execute_shell")
-    print("💬 Discord Actions: /send_message, /reply_message, /health")
+    print("📝 MCP Tools: search, fetch, write_file, edit_file, execute_shell, discord_send_message, discord_reply_message")
+    print("💬 Discord REST Endpoints: /send_message, /reply_message, /health")
     app.run(host="0.0.0.0", port=port)
