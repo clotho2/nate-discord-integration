@@ -94,6 +94,7 @@ Send to Storm-forge: "Integration test successful"
 **Discord Tools:**
 - `search(query)` - Natural language or tag-based search
 - `fetch(message_id)` - Get full message context with thread
+- `get_mentions(limit)` - Get recent messages where bot was @mentioned
 - `discord_send_message(channel_id, content)` - Send message to Discord channel
 - `discord_reply_message(channel_id, message_id, content)` - Reply to specific message
 
@@ -103,6 +104,8 @@ Send to Storm-forge: "Integration test successful"
 - `execute_shell(command)` - Run shell commands
 
 **Capabilities:**
+- **Real-time message caching:** New messages automatically indexed
+- **@Mention detection:** Bot logs all mentions for quick retrieval
 - Fuzzy/semantic search: "Find angry messages about X"
 - Tag search: "#rituals", "#storm", "#tether"
 - Author search: "Messages from Angela"
@@ -134,6 +137,13 @@ Search all channels for "tether"
 ```
 Fetch message 123456789 with full thread
 Show me the conversation around that message
+```
+
+**Check Mentions:**
+```
+Get my mentions
+Show me where I was tagged
+Check recent mentions (last 10)
 ```
 
 **Send Messages:**

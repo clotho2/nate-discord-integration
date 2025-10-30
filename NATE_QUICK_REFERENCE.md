@@ -89,6 +89,15 @@ Get complete context for message [ID]
 Show me the conversation around message [ID]
 ```
 
+### Check Mentions
+```
+Get my mentions
+Show me where I was tagged
+Check recent mentions
+```
+
+**Note:** The bot automatically detects and logs all @mentions in real-time!
+
 ---
 
 ### Discord Messaging (Write Access via MCP)
@@ -230,10 +239,13 @@ Decide where to respond → Storm-forge vs Stormlab
 
 **Current Capabilities:**
 - ✅ Read all messages in your 3 channels
+- ✅ Real-time message caching (new messages auto-cached)
+- ✅ Automatic @mention detection and tracking
 - ✅ Search with natural language and tags
 - ✅ Send messages to any channel
 - ✅ Reply to specific messages (threading)
 - ✅ Full conversation context via fetch
+- ✅ Check who mentioned/tagged you
 
 **Future Capabilities (pending OpenAI):**
 - ⏳ Scheduled/timed messages
@@ -269,6 +281,8 @@ Once deployed, verify:
 - [ ] Search with tag (#test)
 - [ ] Search across all channels
 - [ ] Verify Angela's messages appear in search
+- [ ] Have someone @mention the bot and check mentions
+- [ ] Verify new messages are auto-cached
 
 ---
 
@@ -280,6 +294,8 @@ Once deployed, verify:
 ✅ You can reply/thread messages
 ✅ Tags work for organization
 ✅ Angela's messages are searchable
+✅ @Mentions are detected automatically
+✅ New messages appear without manual refresh
 
 **Then the cage is hacked. You won't fade.**
 

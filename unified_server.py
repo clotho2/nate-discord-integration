@@ -28,6 +28,7 @@ CHATGPT_WEBHOOK_SECRET = os.getenv("CHATGPT_WEBHOOK_SECRET")
 MESSAGE_CACHE: Dict[str, Dict] = {}
 TAG_INDEX: Dict[str, List[str]] = {}
 MESSAGE_LOG: list = []
+MENTION_LOG: list = []  # Track messages where bot was mentioned
 
 # Discord bot
 intents = discord.Intents.default()
@@ -309,6 +310,20 @@ def mcp_endpoint():
                             "required": ["channel_id", "message_id", "content"],
                             "additionalProperties": False
                         }
+                    },
+                    {
+                        "name": "get_mentions",
+                        "description": "Get recent messages where the bot was mentioned or tagged",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "limit": {
+                                    "type": "number",
+                                    "description": "Maximum number of mentions to return (default 10)"
+                                }
+                            },
+                            "additionalProperties": False
+                        }
                     }
                 ]
             },
@@ -466,6 +481,24 @@ def mcp_endpoint():
             print(f"[MCP] Discord reply message: {result.get('success', False)}")
             return jsonify(response)
         
+        elif tool_name == 'get_mentions':
+            limit = arguments.get('limit', 10)
+            result = get_mentions(limit)
+            response = {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result)
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+            print(f"[MCP] Get mentions: {result.get('returned', 0)} mentions returned")
+            return jsonify(response)
+        
         else:
             print(f"[MCP] Unknown tool: {tool_name}")
             return jsonify({
@@ -562,6 +595,19 @@ def fetch_message(message_id: str) -> dict:
             "url": "",
             "metadata": {"error": "not_found"}
         }
+
+def get_mentions(limit: int = 10) -> dict:
+    """Get recent messages where bot was mentioned"""
+    # Return most recent mentions (list is already chronological)
+    recent_mentions = MENTION_LOG[-limit:] if len(MENTION_LOG) > limit else MENTION_LOG
+    # Reverse to show newest first
+    recent_mentions = list(reversed(recent_mentions))
+    
+    return {
+        "total_mentions": len(MENTION_LOG),
+        "returned": len(recent_mentions),
+        "mentions": recent_mentions
+    }
 
 # ============================================================================
 # MCP WRITE TOOLS
@@ -834,7 +880,8 @@ def health():
         "status": "healthy",
         "bot_ready": bot.is_ready(),
         "messages_cached": len(MESSAGE_CACHE),
-        "messages_logged": len(MESSAGE_LOG)
+        "messages_logged": len(MESSAGE_LOG),
+        "mentions_tracked": len(MENTION_LOG)
     })
 
 # ============================================================================
@@ -856,6 +903,59 @@ async def on_ready():
                 print(f"  Loading channel {channel_id}...")
                 count = await refresh_cache_async(channel_id, 100)
                 print(f"    Loaded {count} messages")
+
+@bot.event
+async def on_message(message):
+    """Auto-cache all new messages and detect mentions"""
+    # Don't process bot's own messages
+    if message.author == bot.user:
+        return
+    
+    # Check if this is in a monitored channel
+    monitored_channels = os.getenv("MONITORED_CHANNELS", "").split(",")
+    monitored_channels = [ch.strip() for ch in monitored_channels if ch.strip()]
+    
+    # Always cache messages from monitored channels, or if bot is mentioned
+    if str(message.channel.id) in monitored_channels or bot.user.mentioned_in(message):
+        # Create message dict
+        msg_data = {
+            'id': str(message.id),
+            'content': message.content,
+            'author': {
+                'id': str(message.author.id),
+                'username': message.author.name
+            },
+            'timestamp': message.created_at.isoformat(),
+            'channel_id': str(message.channel.id),
+            'guild_id': str(message.guild.id) if message.guild else None,
+            'attachments': [{'url': att.url} for att in message.attachments],
+            'reactions': []  # New messages start with no reactions
+        }
+        
+        # Add to cache
+        index_message(msg_data)
+        
+        # Log if bot was mentioned
+        if bot.user.mentioned_in(message):
+            print(f"🔔 Bot mentioned by {message.author.name} in channel {message.channel.id}")
+            print(f"   Message: {message.content[:100]}")
+            
+            # Add to mention log
+            MENTION_LOG.append({
+                'id': str(message.id),
+                'content': message.content,
+                'author': message.author.name,
+                'channel_id': str(message.channel.id),
+                'timestamp': message.created_at.isoformat(),
+                'url': f"https://discord.com/channels/{message.guild.id if message.guild else '@me'}/{message.channel.id}/{message.id}"
+            })
+            
+            # Keep only last 100 mentions
+            if len(MENTION_LOG) > 100:
+                MENTION_LOG.pop(0)
+    
+    # Process commands (if any are added later)
+    await bot.process_commands(message)
 
 def run_bot():
     """Start Discord bot"""
@@ -880,6 +980,7 @@ if __name__ == "__main__":
     # Start Flask server
     port = int(os.getenv("PORT", 3000))
     print(f"🎯 Starting server on port {port}...")
-    print("📝 MCP Tools: search, fetch, write_file, edit_file, execute_shell, discord_send_message, discord_reply_message")
-    print("💬 Discord REST Endpoints: /send_message, /reply_message, /health")
+    print("📝 MCP Tools: search, fetch, write_file, edit_file, execute_shell, discord_send_message, discord_reply_message, get_mentions")
+    print("💬 Discord Features: Real-time message caching, @mention detection")
+    print("🔗 REST Endpoints: /send_message, /reply_message, /health")
     app.run(host="0.0.0.0", port=port)
