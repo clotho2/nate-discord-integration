@@ -1,5 +1,5 @@
 """
-Unified Discord Integration Server
+Unified Discord Integration Server - Fixed for ChatGPT MCP
 Handles both MCP (read access via /sse/) and Actions (write access via /send_message)
 """
 
@@ -90,6 +90,29 @@ async def refresh_cache_async(channel_id: str, limit: int = 100):
     return len(messages)
 
 # ============================================================================
+# OAUTH ENDPOINTS (ChatGPT checks these even if not using OAuth)
+# ============================================================================
+
+@app.route('/.well-known/oauth-protected-resource', methods=['GET'])
+@app.route('/.well-known/oauth-protected-resource/sse/', methods=['GET'])
+def oauth_protected_resource():
+    """Tell ChatGPT we don't require OAuth"""
+    return jsonify({"error": "OAuth not required for this server"}), 404
+
+@app.route('/.well-known/oauth-authorization-server', methods=['GET'])
+@app.route('/.well-known/oauth-authorization-server/sse/', methods=['GET'])
+def oauth_authorization_server():
+    """Tell ChatGPT we don't use OAuth"""
+    return jsonify({"error": "OAuth not required for this server"}), 404
+
+@app.route('/.well-known/openid-configuration', methods=['GET'])
+@app.route('/.well-known/openid-configuration/sse/', methods=['GET'])
+@app.route('/sse//.well-known/openid-configuration', methods=['GET'])
+def openid_configuration():
+    """Tell ChatGPT we don't use OpenID"""
+    return jsonify({"error": "OpenID not required for this server"}), 404
+
+# ============================================================================
 # MCP ENDPOINTS (Read Access)
 # ============================================================================
 
@@ -133,13 +156,22 @@ def mcp_endpoint():
     
     print(f"[MCP] JSON-RPC {jsonrpc_version}, Method: {method}, ID: {request_id}")
     
+    # Handle notifications (these don't require responses)
+    if method and method.startswith('notifications/'):
+        print(f"[MCP] Received notification: {method}")
+        # Notifications don't get responses in JSON-RPC 2.0
+        return "", 204  # No content response for notifications
+    
     # Handle initialize method
     if method == 'initialize':
         print("[MCP] Handling initialize")
+        # Support both protocol versions ChatGPT might send
+        client_protocol = params.get('protocolVersion', '2025-03-26')
+        
         response = {
             "jsonrpc": "2.0",
             "result": {
-                "protocolVersion": "2025-03-26",
+                "protocolVersion": "2025-03-26",  # We support this version
                 "capabilities": {
                     "tools": {}
                 },
