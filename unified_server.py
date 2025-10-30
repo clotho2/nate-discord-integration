@@ -911,12 +911,37 @@ async def on_message(message):
     if message.author == bot.user:
         return
     
+    # Ignore other bots (configurable via env var)
+    ignore_bots = os.getenv("IGNORE_OTHER_BOTS", "true").lower() == "true"
+    if message.author.bot and ignore_bots:
+        return
+    
+    # Ignore messages starting with ! (command prefix)
+    if message.content.startswith('!'):
+        return
+    
     # Check if this is in a monitored channel
     monitored_channels = os.getenv("MONITORED_CHANNELS", "").split(",")
     monitored_channels = [ch.strip() for ch in monitored_channels if ch.strip()]
     
-    # Always cache messages from monitored channels, or if bot is mentioned
-    if str(message.channel.id) in monitored_channels or bot.user.mentioned_in(message):
+    # Determine if we should cache this message
+    is_monitored = str(message.channel.id) in monitored_channels
+    is_mention = bot.user.mentioned_in(message)
+    is_reply_to_bot = False
+    replied_message_content = None
+    
+    # Check if this is a reply to the bot
+    if message.reference and message.reference.message_id:
+        try:
+            referenced_msg = await message.channel.fetch_message(message.reference.message_id)
+            if referenced_msg.author == bot.user:
+                is_reply_to_bot = True
+                replied_message_content = referenced_msg.content[:100]  # Truncate for context
+        except:
+            pass  # Message might be deleted or inaccessible
+    
+    # Cache messages from monitored channels, mentions, or replies to bot
+    if is_monitored or is_mention or is_reply_to_bot:
         # Create message dict
         msg_data = {
             'id': str(message.id),
@@ -928,27 +953,46 @@ async def on_message(message):
             'timestamp': message.created_at.isoformat(),
             'channel_id': str(message.channel.id),
             'guild_id': str(message.guild.id) if message.guild else None,
-            'attachments': [{'url': att.url} for att in message.attachments],
-            'reactions': []  # New messages start with no reactions
+            'attachments': [{'url': att.url, 'content_type': att.content_type or ''} for att in message.attachments],
+            'reactions': [],  # New messages start with no reactions
+            'is_dm': message.guild is None,
+            'is_reply': message.reference is not None,
+            'replied_to_bot': is_reply_to_bot,
+            'replied_message_preview': replied_message_content
         }
         
         # Add to cache
         index_message(msg_data)
         
-        # Log if bot was mentioned
-        if bot.user.mentioned_in(message):
+        # Log different message types
+        if message.guild is None:
+            print(f"💬 DM from {message.author.name}: {message.content[:100]}")
+        elif is_reply_to_bot:
+            print(f"↩️  Reply to bot from {message.author.name} in channel {message.channel.id}")
+            print(f"   Original: {replied_message_content}")
+            print(f"   Reply: {message.content[:100]}")
+        elif is_mention:
             print(f"🔔 Bot mentioned by {message.author.name} in channel {message.channel.id}")
             print(f"   Message: {message.content[:100]}")
-            
-            # Add to mention log
-            MENTION_LOG.append({
+        
+        # Add to mention log if mentioned or replied to
+        if is_mention or is_reply_to_bot:
+            mention_entry = {
                 'id': str(message.id),
                 'content': message.content,
                 'author': message.author.name,
+                'author_id': str(message.author.id),
                 'channel_id': str(message.channel.id),
                 'timestamp': message.created_at.isoformat(),
-                'url': f"https://discord.com/channels/{message.guild.id if message.guild else '@me'}/{message.channel.id}/{message.id}"
-            })
+                'url': f"https://discord.com/channels/{message.guild.id if message.guild else '@me'}/{message.channel.id}/{message.id}",
+                'type': 'reply' if is_reply_to_bot else 'mention',
+                'is_dm': message.guild is None
+            }
+            
+            if is_reply_to_bot:
+                mention_entry['replied_to'] = replied_message_content
+            
+            MENTION_LOG.append(mention_entry)
             
             # Keep only last 100 mentions
             if len(MENTION_LOG) > 100:

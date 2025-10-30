@@ -30,13 +30,19 @@ Added two new MCP tools to expose Discord messaging functionality:
    - Description: "Reply to a specific Discord message in a thread"
 
 ### Solution 2: Real-Time Message Monitoring
-Added automatic message caching and mention detection:
+Added automatic message caching and mention detection (inspired by Letta Discord bot):
 
-3. **`on_message` Event Handler**
+3. **`on_message` Event Handler** (Enhanced)
    - Automatically caches all new messages from monitored channels
    - Detects when bot is @mentioned in ANY channel
+   - **NEW: Detects when someone replies to the bot's messages**
+   - **NEW: Captures reply context (original message preview)**
+   - **NEW: Detects and logs DMs separately**
+   - **NEW: Filters out other bots (configurable)**
+   - **NEW: Ignores command messages (starting with !)**
    - Makes new messages immediately searchable
-   - Logs mentions for quick retrieval
+   - Logs mentions and replies for quick retrieval
+   - Enhanced logging with emoji indicators (🔔 mention, ↩️ reply, 💬 DM)
 
 4. **`get_mentions` Tool**
    - Retrieve recent messages where bot was @mentioned
@@ -44,10 +50,27 @@ Added automatic message caching and mention detection:
    - Returns: message content, author, timestamp, URL
    - Description: "Get recent messages where the bot was mentioned or tagged"
 
-5. **`MENTION_LOG` Storage**
-   - Dedicated in-memory log of all mentions
-   - Keeps last 100 mentions
+5. **`MENTION_LOG` Storage** (Enhanced)
+   - Dedicated in-memory log of all mentions AND replies
+   - Keeps last 100 mentions/replies
    - Includes full context for each mention
+   - **NEW: Tracks reply vs mention type**
+   - **NEW: Includes original message context for replies**
+   - **NEW: Flags DMs separately**
+   - **NEW: Stores author ID for better tracking**
+
+6. **Message Filtering**
+   - Ignore other bots (controlled by `IGNORE_OTHER_BOTS` env var)
+   - Ignore command messages (starting with `!`)
+   - Ignore bot's own messages
+   - Smart detection of reply context
+
+7. **Enhanced Message Metadata**
+   - `is_dm`: Flag for direct messages
+   - `is_reply`: Flag for reply messages
+   - `replied_to_bot`: True if replying to bot
+   - `replied_message_preview`: Preview of original message (for replies)
+   - `content_type`: For attachments (image detection, etc.)
 
 ## Files Modified
 
@@ -133,10 +156,13 @@ Save text content to a file for record-keeping and data storage purposes
 ### How It Works
 The `on_message` event handler:
 1. Triggers on every new Discord message
-2. Checks if message is in monitored channels OR mentions the bot
-3. Caches the message in `MESSAGE_CACHE` (searchable)
-4. If mentioned, adds to `MENTION_LOG` (retrievable via `get_mentions`)
-5. Logs mention event to console for visibility
+2. **Filters:** Ignores bot's own messages, other bots (optional), and commands
+3. **Reply Detection:** Checks if message is a reply to the bot's previous messages
+4. **Context Capture:** Fetches original message content for replies
+5. **Caching:** Stores messages from monitored channels, mentions, or replies
+6. **Mention Logging:** Adds mentions AND replies to `MENTION_LOG`
+7. **Smart Logging:** Different emoji indicators for mentions (🔔), replies (↩️), and DMs (💬)
+8. **Metadata:** Enriches messages with reply context, DM flags, and attachment info
 
 ## Testing Checklist
 
@@ -150,6 +176,9 @@ After deploying these changes:
 - [ ] Test: "Get my mentions" or "Check recent mentions"
 - [ ] Verify: Send a message in monitored channel, immediately search for it
 - [ ] Verify: Server logs show `🔔 Bot mentioned by...` when tagged
+- [ ] Test: Reply to one of the bot's messages (should show `↩️ Reply to bot...`)
+- [ ] Verify: `get_mentions` includes both @mentions and replies
+- [ ] Verify: Bot ignores other bots and messages starting with `!`
 
 ## Deployment
 
