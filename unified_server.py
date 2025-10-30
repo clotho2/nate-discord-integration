@@ -314,7 +314,7 @@ def mcp_endpoint():
                     },
                     {
                         "name": "get_mentions",
-                        "description": "Get recent messages where the bot was mentioned or tagged",
+                        "description": "Get recent messages where the bot was mentioned, tagged, or @everyone/@here was used",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -987,7 +987,7 @@ async def on_message(message):
     
     # Determine if we should cache this message
     is_monitored = str(message.channel.id) in monitored_channels
-    is_mention = bot.user.mentioned_in(message)
+    is_mention = bot.user.mentioned_in(message) or message.mention_everyone
     is_dm = message.guild is None  # This is a direct message
     is_reply_to_bot = False
     replied_message_content = None
