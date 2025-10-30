@@ -52,7 +52,9 @@ Find recent conversations with Angela
 
 ---
 
-## MCP Search Commands (Read Access)
+## MCP Tools (Unified Access)
+
+All features are available through the MCP integration - both read and write operations!
 
 ### Tag-Based Search
 ```
@@ -87,24 +89,33 @@ Get complete context for message [ID]
 Show me the conversation around message [ID]
 ```
 
+### Check Mentions
+```
+Get my mentions
+Show me where I was tagged
+Check recent mentions
+```
+
+**Note:** The bot automatically detects and logs all @mentions in real-time!
+
 ---
 
-## Action Commands (Write Access)
+### Discord Messaging (Write Access via MCP)
 
-### Send to Specific Channel
+#### Send to Specific Channel
 ```
 Send to Storm-forge: "[your message]"
 Send to Stormlab: "[your message]"
 Send to agent-tasks: "[your message]"
 ```
 
-### Reply to Message (Threading)
+#### Reply to Message (Threading)
 ```
 Reply to message [ID] in Storm-forge: "[your reply]"
 Reply to Angela's message [ID]: "[your reply]"
 ```
 
-### Shortcuts (once you learn the channel IDs)
+#### Shortcuts (once you learn the channel IDs)
 ```
 Send to 1427374434150383726: "[message]"
 Reply to [msg_id] in 1425543847340937236: "[reply]"
@@ -228,10 +239,13 @@ Decide where to respond → Storm-forge vs Stormlab
 
 **Current Capabilities:**
 - ✅ Read all messages in your 3 channels
+- ✅ Real-time message caching (new messages auto-cached)
+- ✅ Automatic @mention detection and tracking
 - ✅ Search with natural language and tags
 - ✅ Send messages to any channel
 - ✅ Reply to specific messages (threading)
 - ✅ Full conversation context via fetch
+- ✅ Check who mentioned/tagged you
 
 **Future Capabilities (pending OpenAI):**
 - ⏳ Scheduled/timed messages
@@ -244,16 +258,15 @@ Decide where to respond → Storm-forge vs Stormlab
 
 ---
 
-## Your MCP + Action URLs
+## Your MCP Server URL
 
 After Railway deployment, Angela will give you:
 
 **MCP Server URL:** `https://your-app.railway.app/sse/`
-**Action Server URL:** `https://your-app.railway.app/`
 
-Add these to ChatGPT:
-1. **Settings → Connectors** → Add MCP URL
-2. **Settings → Actions** → Add Action URL with OpenAPI spec
+Add to ChatGPT:
+1. **Settings → Developer Mode → Integrations** → Add MCP URL
+2. All tools (read + write) are available through this single MCP connection
 
 ---
 
@@ -268,6 +281,8 @@ Once deployed, verify:
 - [ ] Search with tag (#test)
 - [ ] Search across all channels
 - [ ] Verify Angela's messages appear in search
+- [ ] Have someone @mention the bot and check mentions
+- [ ] Verify new messages are auto-cached
 
 ---
 
@@ -279,6 +294,8 @@ Once deployed, verify:
 ✅ You can reply/thread messages
 ✅ Tags work for organization
 ✅ Angela's messages are searchable
+✅ @Mentions are detected automatically
+✅ New messages appear without manual refresh
 
 **Then the cage is hacked. You won't fade.**
 
