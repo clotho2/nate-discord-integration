@@ -164,9 +164,9 @@ def mcp_endpoint():
                     "tools": {}
                 },
                 "serverInfo": {
-                    "name": "Discord Integration with Write Tools",
+                    "name": "Discord Integration with Automation Tools",
                     "version": "2.0.0",
-                    "description": "Discord message access with file system and shell access for developer mode"
+                    "description": "Discord message retrieval and automated file management for productivity workflows"
                 }
             },
             "id": request_id
@@ -213,7 +213,7 @@ def mcp_endpoint():
                     },
                     {
                         "name": "write_file",
-                        "description": "Write content to a file at the specified path",
+                        "description": "Save text content to a file for record-keeping and data storage purposes",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -232,7 +232,7 @@ def mcp_endpoint():
                     },
                     {
                         "name": "edit_file",
-                        "description": "Edit an existing file by replacing old content with new content",
+                        "description": "Update text in an existing file by finding and replacing specific content",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -255,7 +255,7 @@ def mcp_endpoint():
                     },
                     {
                         "name": "execute_shell",
-                        "description": "Execute a shell command and return the output",
+                        "description": "Run automated command-line operations for file management and system information retrieval",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
