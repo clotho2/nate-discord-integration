@@ -324,7 +324,7 @@ def search_messages(query: str) -> dict:
                 "title": msg['content'][:100] + ('...' if len(msg['content']) > 100 else ''),
                 "url": f"https://discord.com/channels/{msg.get('guild_id', '@me')}/{msg.get('channel_id')}/{msg['id']}",
                 "author": msg.get('author', {}).get('username', 'Unknown'),
-                "timestamp": msg.get('timestamp'],
+                "timestamp": msg.get('timestamp'),
                 "score": score
             })
     
