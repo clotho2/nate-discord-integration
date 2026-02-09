@@ -576,6 +576,28 @@ def mcp_endpoint():
                 "id": request_id
             }), 400
     
+    # Handle resources/list - return empty list (no resources served)
+    elif method == 'resources/list':
+        mcp_log("[MCP] Handling resources/list (empty)")
+        return jsonify({
+            "jsonrpc": "2.0",
+            "result": {
+                "resources": []
+            },
+            "id": request_id
+        })
+
+    # Handle prompts/list - return empty list (no prompts served)
+    elif method == 'prompts/list':
+        mcp_log("[MCP] Handling prompts/list (empty)")
+        return jsonify({
+            "jsonrpc": "2.0",
+            "result": {
+                "prompts": []
+            },
+            "id": request_id
+        })
+
     else:
         mcp_log(f"[MCP] Unknown method: {method}")
         return jsonify({
