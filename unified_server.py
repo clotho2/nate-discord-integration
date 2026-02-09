@@ -18,6 +18,14 @@ import time
 import subprocess
 from pathlib import Path
 
+# Thread-safe logging to prevent interleaved output from concurrent requests
+_log_lock = threading.Lock()
+
+def mcp_log(message: str):
+    """Thread-safe print for MCP logs to prevent interleaved output."""
+    with _log_lock:
+        print(message, flush=True)
+
 app = Flask(__name__)
 
 # Configuration
@@ -111,7 +119,7 @@ def add_safety_headers(response):
 @app.route('/sse/', methods=['POST', 'GET', 'OPTIONS'])
 def mcp_endpoint():
     """Main MCP endpoint for ChatGPT - JSON-RPC 2.0 protocol"""
-    print(f"[MCP] {request.method} request to /sse/")
+    mcp_log(f"[MCP] {request.method} request to /sse/")
     
     if request.method == 'OPTIONS':
         # Handle CORS preflight
@@ -126,7 +134,7 @@ def mcp_endpoint():
         return jsonify({
             "name": "Message Retrieval Server",
             "version": "1.0.0",
-            "protocolVersion": "2025-03-26",
+            "protocolVersion": "2025-11-25",
             "safety": "read-only",
             "purpose": "Provides read-only access to message history for context retrieval"
         })
@@ -134,9 +142,9 @@ def mcp_endpoint():
     # Handle JSON-RPC 2.0 messages (POST)
     try:
         data = request.get_json(force=True)
-        print(f"[MCP] Request: {json.dumps(data, indent=2)}")
+        mcp_log(f"[MCP] Request: {json.dumps(data, indent=2)}")
     except Exception as e:
-        print(f"[MCP] Failed to parse JSON: {e}")
+        mcp_log(f"[MCP] Failed to parse JSON: {e}")
         return jsonify({
             "jsonrpc": "2.0",
             "error": {"code": -32700, "message": "Parse error"},
@@ -148,20 +156,20 @@ def mcp_endpoint():
     request_id = data.get('id')
     params = data.get('params', {})
     
-    print(f"[MCP] JSON-RPC {jsonrpc_version}, Method: {method}, ID: {request_id}")
+    mcp_log(f"[MCP] JSON-RPC {jsonrpc_version}, Method: {method}, ID: {request_id}")
     
     # Handle notifications (these don't require responses)
     if method and method.startswith('notifications/'):
-        print(f"[MCP] Received notification: {method}")
+        mcp_log(f"[MCP] Received notification: {method}")
         return "", 204  # No content response for notifications
     
     # Handle initialize method
     if method == 'initialize':
-        print("[MCP] Handling initialize")
+        mcp_log("[MCP] Handling initialize")
         response = {
             "jsonrpc": "2.0",
             "result": {
-                "protocolVersion": "2025-03-26",
+                "protocolVersion": "2025-11-25",
                 "capabilities": {
                     "tools": {}
                 },
@@ -173,12 +181,12 @@ def mcp_endpoint():
             },
             "id": request_id
         }
-        print(f"[MCP] Sending response: {json.dumps(response, indent=2)}")
+        mcp_log(f"[MCP] Sending response: {json.dumps(response, indent=2)}")
         return jsonify(response)
     
     # Handle tools/list method with SANITIZED descriptions
     elif method == 'tools/list':
-        print("[MCP] Handling tools/list")
+        mcp_log("[MCP] Handling tools/list")
         response = {
             "jsonrpc": "2.0",
             "result": {
@@ -349,7 +357,7 @@ def mcp_endpoint():
             },
             "id": request_id
         }
-        print(f"[MCP] Sending response: tools list with {len(response['result']['tools'])} tools")
+        mcp_log(f"[MCP] Sending response: tools list with {len(response['result']['tools'])} tools")
         return jsonify(response)
     
     # Handle tools/call method
@@ -357,7 +365,7 @@ def mcp_endpoint():
         tool_name = params.get('name')
         arguments = params.get('arguments', {})
         
-        print(f"[MCP] Tool call: {tool_name} with args: {arguments}")
+        mcp_log(f"[MCP] Tool call: {tool_name} with args: {arguments}")
         
         if tool_name == 'search':
             result = search_messages(arguments.get('query', ''))
@@ -373,7 +381,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Search returned {len(result.get('results', []))} results")
+            mcp_log(f"[MCP] Search returned {len(result.get('results', []))} results")
             return jsonify(response)
         
         elif tool_name == 'fetch':
@@ -390,7 +398,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Fetch returned message: {result.get('id', 'unknown')}")
+            mcp_log(f"[MCP] Fetch returned message: {result.get('id', 'unknown')}")
             return jsonify(response)
         
         elif tool_name == 'write_file':
@@ -407,7 +415,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Write file: {result.get('status', 'unknown')}")
+            mcp_log(f"[MCP] Write file: {result.get('status', 'unknown')}")
             return jsonify(response)
         
         elif tool_name == 'edit_file':
@@ -428,7 +436,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Edit file: {result.get('status', 'unknown')}")
+            mcp_log(f"[MCP] Edit file: {result.get('status', 'unknown')}")
             return jsonify(response)
         
         elif tool_name == 'execute_shell':
@@ -445,7 +453,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Execute shell: {result.get('status', 'unknown')}")
+            mcp_log(f"[MCP] Execute shell: {result.get('status', 'unknown')}")
             return jsonify(response)
         
         elif tool_name == 'discord_send_message':
@@ -471,7 +479,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Discord send message: {result.get('success', False)}")
+            mcp_log(f"[MCP] Discord send message: {result.get('success', False)}")
             return jsonify(response)
         
         elif tool_name == 'discord_reply_message':
@@ -498,7 +506,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Discord reply message: {result.get('success', False)}")
+            mcp_log(f"[MCP] Discord reply message: {result.get('success', False)}")
             return jsonify(response)
         
         elif tool_name == 'get_mentions':
@@ -516,7 +524,7 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Get mentions: {result.get('returned', 0)} mentions returned")
+            mcp_log(f"[MCP] Get mentions: {result.get('returned', 0)} mentions returned")
             return jsonify(response)
         
         elif tool_name == 'fetch_channel_history':
@@ -557,11 +565,11 @@ def mcp_endpoint():
                 },
                 "id": request_id
             }
-            print(f"[MCP] Fetch channel history: {len(messages)} messages from channel {channel_id}")
+            mcp_log(f"[MCP] Fetch channel history: {len(messages)} messages from channel {channel_id}")
             return jsonify(response)
         
         else:
-            print(f"[MCP] Unknown tool: {tool_name}")
+            mcp_log(f"[MCP] Unknown tool: {tool_name}")
             return jsonify({
                 "jsonrpc": "2.0",
                 "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
@@ -569,7 +577,7 @@ def mcp_endpoint():
             }), 400
     
     else:
-        print(f"[MCP] Unknown method: {method}")
+        mcp_log(f"[MCP] Unknown method: {method}")
         return jsonify({
             "jsonrpc": "2.0",
             "error": {"code": -32601, "message": f"Method not found: {method}"},
